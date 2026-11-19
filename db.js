@@ -1,3 +1,9 @@
+const fs = require('fs');
+if (!fs.existsSync('/data')) {
+    fs.mkdirSync('/data', { recursive: true });
+}
+    
+
 const Database = require("better-sqlite3")
 const db = new Database("/data/domashka.db");
 
