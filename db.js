@@ -1,5 +1,5 @@
 const Database = require("better-sqlite3")
-const db = new Database("domashka.db");
+const db = new Database("/data/domashka.db");
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS lessons (
