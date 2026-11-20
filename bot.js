@@ -77,7 +77,7 @@ bot.use(async (ctx, next) => {
         console.log(`Отказ в доступе: ${userId} не состоишь в группе.`);
         
         if (ctx.chat.type === "private") {
-            await ctx.reply("Для начала работы, вступи в нашу группу класса https://t.me/for_recreation_school");
+            await ctx.reply("Для начала работы, вступи в нашу группу класса @for_recreation_school");
         }
         return; 
     }
