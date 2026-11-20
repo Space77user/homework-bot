@@ -12,7 +12,6 @@ const {
 const bot = new Bot(process.env.BOT_TOKEN);
 const dayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-const ALLOWED_USERS = [1300075799,1663159343,7035521464,];
 const OWNER_ID = 1300075799; 
 const GROUP_ID = -1004453157797;
 
@@ -35,7 +34,7 @@ bot.use(async (ctx, next) => {
         if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
             
             await ctx.reply(" Я работаю только в личных сообщениях! Нажми на мое имя и напиши мне в личку.", {
-                reply_to_message_id: ctx.message.message_id // Отвечаем на сообщение пользователя
+                reply_to_message_id: ctx.message.message_id 
             });
             
             return; 
@@ -59,17 +58,29 @@ bot.use(async (ctx, next) => {
 bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
     
-    if (!ALLOWED_USERS.includes(userId)) {
-        console.log(`запрет для ID: ${userId}`);
+    if (ctx.from?.is_bot) return next();
+
+    if (ctx.chat.type === "private" && userId === OWNER_ID) {
+        return next();
+    }
+
+    try {
+        const member = await ctx.api.getChatMember(GROUP_ID, userId);
         
-        if (ctx.chat.type === "private") {
-            await ctx.reply("Я работаю только для участников Space");
+        if (["creator", "administrator", "member"].includes(member.status)) {
+            return next();
         }
         
+        throw new Error("Not a member");
+        
+    } catch (error) {
+        console.log(`Отказ в доступе: ${userId} не состоишь в группе.`);
+        
+        if (ctx.chat.type === "private") {
+            await ctx.reply("Для начала работы, вступи в нашу группу класса https://t.me/for_recreation_school");
+        }
         return; 
     }
-    
-    return next();
 });
 
 
