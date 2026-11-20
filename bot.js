@@ -33,7 +33,7 @@ bot.use(async (ctx, next) => {
 
         if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
             
-            await ctx.reply(" Я работаю только в личных сообщениях! Нажми на мое имя и напиши мне в личку.", {
+            await ctx.reply(" Я работаю только в личных сообщениях, не засоряя чат", {
                 reply_to_message_id: ctx.message.message_id 
             });
             
