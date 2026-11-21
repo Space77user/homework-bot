@@ -110,8 +110,11 @@ async function showHomework(ctx, lessonId, day, isEditing = false) {
             message += `${index + 1}. От ${hw.author_name}:\n`;
             if (hw.text) message += `${hw.text}\n`;
             
-            if (hw.photo_id) photosToSend.push(hw.photo_id);
-
+            if (hw.photo_id) {
+                // Разделяем строку по запятой (если фото несколько) и добавляем в массив
+                const ids = hw.photo_id.split(',');
+                photosToSend.push(...ids);
+            }
             if (hw.author_id === ctx.from.id) {
                 keyboard.text(`🗑 Удалить ДЗ №${index + 1}`, `del_${hw.id}_${lessonId}_${day}`).row();
             }
@@ -476,39 +479,76 @@ bot.on("message:photo", async (ctx) => {
         const authorName = ctx.from.first_name || "Ученик";
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         const text = ctx.message.caption || null;
+        const mediaGroupId = ctx.message.media_group_id;
 
-        addHomework(lessonId, ctx.from.id, authorName, text, photoId, getCurrentWeekId());
+        // Если это НЕ альбом (одно фото)
+        if (!mediaGroupId) {
+            addHomework(lessonId, ctx.from.id, authorName, text, photoId, getCurrentWeekId());
+            await finalizePhotoUpload(ctx, lessonId, savedDay, promptMsgId, oldMsgId);
+            return;
+        }
 
-        ctx.session.step = null;
-        ctx.session.hw_lesson_id = null;
-        ctx.session.hw_day = null;
-        ctx.session.prompt_msg_id = null;
-        ctx.session.old_msg_id = null;
-
-        const successMsg = await ctx.reply("✅ добавлено!");
-
-        setTimeout(async () => {
-            try {
-                await ctx.api.deleteMessage(ctx.chat.id, successMsg.message_id);
+        // Если это АЛЬБОМ
+        if (!ctx.session.album_photos) {
+            ctx.session.album_photos = []; // Массив для сбора ID
+            ctx.session.album_msg_ids = []; // Массив для сбора ID сообщений (чтобы удалить)
+            
+            // Запускаем таймер: ждем 1.5 секунды, пока придут все фото
+            setTimeout(async () => {
+                // Склеиваем все ID фото через запятую
+                const allPhotos = ctx.session.album_photos.join(',');
+                // Сохраняем в базу
+                addHomework(lessonId, ctx.from.id, authorName, text, allPhotos, getCurrentWeekId());
                 
-                if (promptMsgId) {
-                    await ctx.api.deleteMessage(ctx.chat.id, promptMsgId);
-                }
+                // Собираем ID всех сообщений, чтобы удалить их
+                const msgsToDelete = ctx.session.album_msg_ids;
+                
+                // Очищаем сессию
+                ctx.session.album_photos = null;
+                ctx.session.album_msg_ids = null;
 
-                await ctx.api.deleteMessage(ctx.chat.id, ctx.message.message_id);
-                
-                if (oldMsgId) {
-                    await ctx.api.deleteMessage(ctx.chat.id, oldMsgId);
-                }
-                
-                await showHomework(ctx, lessonId, savedDay, false); 
-            } catch (e) {
-                console.error("Не удалось удалить сообщение:", e);
-            }
-        }, 3000);
-        return;
+                await finalizePhotoUpload(ctx, lessonId, savedDay, promptMsgId, oldMsgId, msgsToDelete);
+            }, 1500);
+        }
+
+        // Добавляем текущее фото в массивы
+        ctx.session.album_photos.push(photoId);
+        ctx.session.album_msg_ids.push(ctx.message.message_id);
     }
 });
+
+// Вспомогательная функция для финализации (чтобы не дублировать код)
+async function finalizePhotoUpload(ctx, lessonId, savedDay, promptMsgId, oldMsgId, msgsToDelete = []) {
+    ctx.session.step = null;
+    ctx.session.hw_lesson_id = null;
+    ctx.session.hw_day = null;
+    ctx.session.prompt_msg_id = null;
+    ctx.session.old_msg_id = null;
+
+    const successMsg = await ctx.reply("✅ Фото добавлено!");
+    const currentMsgId = ctx.message.message_id;
+
+    setTimeout(async () => {
+        try {
+            await ctx.api.deleteMessage(ctx.chat.id, successMsg.message_id);
+            if (promptMsgId) await ctx.api.deleteMessage(ctx.chat.id, promptMsgId);
+            if (oldMsgId) await ctx.api.deleteMessage(ctx.chat.id, oldMsgId);
+            
+            // Удаляем все сообщения из альбома
+            if (msgsToDelete.length > 0) {
+                for (const msgId of msgsToDelete) {
+                    await ctx.api.deleteMessage(ctx.chat.id, msgId).catch(() => {});
+                }
+            } else {
+                await ctx.api.deleteMessage(ctx.chat.id, currentMsgId);
+            }
+            
+            await showHomework(ctx, lessonId, savedDay, false); 
+        } catch (e) {
+            console.error("Ошибка при удалении:", e);
+        }
+    }, 5000);
+}
 
 
 
